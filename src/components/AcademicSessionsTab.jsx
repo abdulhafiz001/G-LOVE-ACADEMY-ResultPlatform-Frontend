@@ -4,6 +4,27 @@ import { COLORS } from '../constants/colors';
 import API from '../services/API';
 import { useNotification } from '../contexts/NotificationContext';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
+// Assuming you have a basic Modal component setup or will create one
+// You might need to adjust the import path for EditDatesModal
+import EditSessionDatesModal from './EditSessionDatesModal'; 
+
+// Utility function to format date from ISO string to a display-friendly format
+const formatDateDisplay = (isoDateString) => {
+  if (!isoDateString) return 'N/A';
+  // Attempt to parse only the date part (YYYY-MM-DD) to avoid timezone issues 
+  // with toLocaleDateString when the time is 00:00:00Z
+  const datePart = isoDateString.split('T')[0];
+  const date = new Date(datePart + 'T00:00:00'); 
+  // Using 'en-US' or another locale for a clean display (e.g., 9/8/2025)
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'numeric', day: 'numeric' });
+};
+
+// Utility function to format date from ISO string to YYYY-MM-DD for date inputs
+const formatDateForInput = (isoDateString) => {
+  if (!isoDateString) return '';
+  return isoDateString.split('T')[0];
+};
+
 
 const AcademicSessionsTab = () => {
   const [sessions, setSessions] = useState([]);
@@ -11,6 +32,12 @@ const AcademicSessionsTab = () => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, session: null });
   const [submitting, setSubmitting] = useState(false);
+  // New state for the Edit Dates Modal
+  const [editTermModal, setEditTermModal] = useState({
+    isOpen: false,
+    term: null, // Holds the term object being edited
+    sessionId: null, // Holds the parent session ID
+  });
   const { showSuccess, showError, showWarning } = useNotification();
 
   const [newSession, setNewSession] = useState({
@@ -32,7 +59,7 @@ const AcademicSessionsTab = () => {
       let sessionsData = [];
       if (response && response.data) {
         sessionsData = Array.isArray(response.data) ? response.data : 
-                     response.data.data ? response.data.data : [];
+                       response.data.data ? response.data.data : [];
       }
       
       setSessions(sessionsData);
@@ -115,14 +142,17 @@ const AcademicSessionsTab = () => {
     }
   };
 
+  // Handler for updating term dates from the modal
   const handleUpdateTerm = async (termId, termData) => {
+    closeEditModal(); // Close the modal immediately
     setSubmitting(true);
     try {
+      // termData already contains { start_date: 'YYYY-MM-DD', end_date: 'YYYY-MM-DD' }
       await API.updateTerm(termId, termData);
-      showSuccess('Term updated successfully');
+      showSuccess('Term dates updated successfully');
       fetchSessions();
     } catch (error) {
-      showError(error.response?.data?.message || 'Failed to update term');
+      showError(error.response?.data?.message || 'Failed to update term dates');
     } finally {
       setSubmitting(false);
     }
@@ -152,12 +182,14 @@ const AcademicSessionsTab = () => {
 
   const calculateSessionStatus = (session) => {
     const today = new Date();
-    const start = new Date(session.start_date);
-    const end = new Date(session.end_date);
+    // Using datePart to avoid timezone shift issues during comparison
+    const start = new Date(session.start_date.split('T')[0]);
+    const end = new Date(session.end_date.split('T')[0]);
 
     if (session.is_current) return 'current';
     if (today < start) return 'upcoming';
-    if (today > end) return 'past';
+    // Add one day to end date for 'past' check to include the whole end date
+    if (today > new Date(end.getTime() + (24 * 60 * 60 * 1000))) return 'past';
     return 'active';
   };
 
@@ -179,6 +211,23 @@ const AcademicSessionsTab = () => {
   const canDeleteSession = (session) => {
     const status = calculateSessionStatus(session);
     return status === 'upcoming' && !session.is_current;
+  };
+
+  // New handlers for the Edit Dates Modal
+  const openEditModal = (term, sessionId) => {
+    setEditTermModal({
+      isOpen: true,
+      term,
+      sessionId,
+    });
+  };
+
+  const closeEditModal = () => {
+    setEditTermModal({
+      isOpen: false,
+      term: null,
+      sessionId: null,
+    });
   };
 
   return (
@@ -329,11 +378,11 @@ const AcademicSessionsTab = () => {
               const status = calculateSessionStatus(session);
               return (
                 <div key={session.id} className="bg-white shadow rounded-lg overflow-hidden border-l-4" 
-                     style={{ borderLeftColor: 
-                       status === 'current' ? '#10B981' : 
-                       status === 'active' ? '#3B82F6' : 
-                       status === 'upcoming' ? '#F59E0B' : '#6B7280' 
-                     }}>
+                      style={{ borderLeftColor: 
+                        status === 'current' ? '#10B981' : 
+                        status === 'active' ? '#3B82F6' : 
+                        status === 'upcoming' ? '#F59E0B' : '#6B7280' 
+                      }}>
                   <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-3">
@@ -350,7 +399,7 @@ const AcademicSessionsTab = () => {
                           )}
                         </div>
                         <div className="text-sm text-gray-500">
-                          {new Date(session.start_date).toLocaleDateString()} - {new Date(session.end_date).toLocaleDateString()}
+                          **{formatDateDisplay(session.start_date)}** - **{formatDateDisplay(session.end_date)}**
                         </div>
                       </div>
                       <div className="flex space-x-2">
@@ -403,22 +452,14 @@ const AcademicSessionsTab = () => {
                             )}
                           </div>
                           <div className="text-xs text-gray-500 space-y-1">
-                            <div>Start: {new Date(term.start_date).toLocaleDateString()}</div>
-                            <div>End: {new Date(term.end_date).toLocaleDateString()}</div>
+                            <div>Start: **{formatDateDisplay(term.start_date)}**</div>
+                            <div>End: **{formatDateDisplay(term.end_date)}**</div>
                           </div>
                           <button
-                            onClick={() => {
-                              const newStart = prompt('Enter new start date (YYYY-MM-DD):', term.start_date);
-                              const newEnd = prompt('Enter new end date (YYYY-MM-DD):', term.end_date);
-                              if (newStart && newEnd) {
-                                handleUpdateTerm(term.id, {
-                                  start_date: newStart,
-                                  end_date: newEnd,
-                                });
-                              }
-                            }}
-                            className="mt-2 text-xs text-blue-600 hover:text-blue-800"
+                            onClick={() => openEditModal(term, session.id)} // Open the modal
+                            className="mt-2 text-xs text-blue-600 hover:text-blue-800 flex items-center"
                           >
+                            <Edit className="h-3 w-3 mr-1" />
                             Edit Dates
                           </button>
                         </div>
@@ -441,8 +482,21 @@ const AcademicSessionsTab = () => {
         itemName={deleteModal.session?.name}
         isLoading={submitting}
       />
+
+      {/* New Edit Dates Modal Component */}
+      {editTermModal.isOpen && editTermModal.term && (
+        <EditSessionDatesModal
+          isOpen={editTermModal.isOpen}
+          onClose={closeEditModal}
+          term={editTermModal.term}
+          onSubmit={handleUpdateTerm}
+          submitting={submitting}
+          formatDateForInput={formatDateForInput} // Pass the utility function
+        />
+      )}
     </div>
   );
 };
 
 export default AcademicSessionsTab;
+
