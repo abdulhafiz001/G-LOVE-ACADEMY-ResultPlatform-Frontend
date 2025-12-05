@@ -200,6 +200,30 @@ const ManageScores = () => {
     }
   };
 
+  // Helper function to process requests in batches with delays
+  const processBatch = async (items, batchSize, delay, processor) => {
+    const results = [];
+    for (let i = 0; i < items.length; i += batchSize) {
+      const batch = items.slice(i, i + batchSize);
+      const batchPromises = batch.map(processor);
+      
+      try {
+        const batchResults = await Promise.all(batchPromises);
+        results.push(...batchResults);
+        
+        // Add delay between batches (except for the last batch)
+        if (i + batchSize < items.length) {
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      } catch (error) {
+        // If a batch fails, add null results for that batch
+        debug.warn('Batch failed:', error);
+        results.push(...batch.map(() => null));
+      }
+    }
+    return results;
+  };
+
   const loadStudentScores = async (studentsList, classId = null, subjectId = null) => {
     try {
       // Use provided parameters or fall back to state (to avoid closure issues)
@@ -220,11 +244,30 @@ const ManageScores = () => {
       // Clear scores first to prevent showing old data
       setStudentScores({});
       
-      const scoresPromises = studentsList.map(student => 
-        API.getStudentScores(student.id, { class_id: currentClass, subject_id: currentSubject })
+      // Process requests in batches of 3 with 150ms delay between batches
+      // This prevents database connection exhaustion
+      const batchSize = 3;
+      const delayBetweenBatches = 150; // milliseconds
+      
+      const scoresResponses = await processBatch(
+        studentsList,
+        batchSize,
+        delayBetweenBatches,
+        async (student) => {
+          try {
+            const response = await API.getStudentScores(student.id, { 
+              class_id: currentClass, 
+              subject_id: currentSubject 
+            });
+            return response;
+          } catch (error) {
+            debug.warn(`Failed to load scores for student ${student.id}:`, error);
+            // Return empty array on error instead of throwing
+            return { data: [] };
+          }
+        }
       );
       
-      const scoresResponses = await Promise.all(scoresPromises);
       debug.component('ManageScores', 'loadStudentScores - Responses received', { count: scoresResponses.length });
       
       const scoresMap = {};
