@@ -356,56 +356,67 @@ const StudentResults = () => {
       return false;
     }
 
-    // Get all subject IDs from current results
+    // Normalize student subject IDs to numbers for comparison
+    const normalizedStudentSubjectIds = studentSubjects.map(id => Number(id)).filter(id => !isNaN(id));
+
+    // Get all subject IDs from current results and normalize to numbers
     const resultSubjectIds = currentResults.map(result => {
       // Check for direct subject_id property
-      if (result.subject_id) {
-        return result.subject_id;
+      if (result.subject_id !== null && result.subject_id !== undefined) {
+        return Number(result.subject_id);
       }
       // Check for nested subject object with id
       if (result.subject) {
         if (typeof result.subject === 'object' && result.subject.id) {
-          return result.subject.id;
+          return Number(result.subject.id);
         }
         // If subject is just an ID (number)
         if (typeof result.subject === 'number') {
-          return result.subject;
+          return Number(result.subject);
         }
       }
       return null;
-    }).filter(id => id !== null);
+    }).filter(id => id !== null && !isNaN(id));
 
-    debug.log('Student subjects:', studentSubjects);
-    debug.log('Result subject IDs:', resultSubjectIds);
+    debug.log('Student subjects (normalized):', normalizedStudentSubjectIds);
+    debug.log('Result subject IDs (normalized):', resultSubjectIds);
 
     // Check if all student subjects have results
-    const allSubjectsHaveResults = studentSubjects.every(subjectId => 
+    const allSubjectsHaveResults = normalizedStudentSubjectIds.every(subjectId => 
       resultSubjectIds.includes(subjectId)
     );
 
     if (!allSubjectsHaveResults) {
-      debug.log('Not all subjects have results');
+      const missingSubjects = normalizedStudentSubjectIds.filter(id => !resultSubjectIds.includes(id));
+      debug.log('Not all subjects have results. Missing subject IDs:', missingSubjects);
       return false;
     }
 
     // Check if all results have complete scores (first_ca, second_ca, exam_score)
-    // Allow 0 as a valid score, but not null or undefined
+    // Allow 0 as a valid score, but not null, undefined, or empty string
     const allScoresComplete = currentResults.every(result => {
-      const firstCA = result.first_ca !== null && result.first_ca !== undefined;
-      const secondCA = result.second_ca !== null && result.second_ca !== undefined;
-      const exam = result.exam_score !== null && result.exam_score !== undefined;
+      // Convert to numbers and check if they're valid (not null, undefined, or empty string)
+      const firstCA = result.first_ca !== null && result.first_ca !== undefined && result.first_ca !== '';
+      const secondCA = result.second_ca !== null && result.second_ca !== undefined && result.second_ca !== '';
+      const exam = result.exam_score !== null && result.exam_score !== undefined && result.exam_score !== '';
       const isComplete = firstCA && secondCA && exam;
+      
       if (!isComplete) {
-        debug.log('Incomplete scores for subject:', result.subject?.name || result.subject_id, {
+        const subjectName = result.subject?.name || result.subject_id || 'Unknown';
+        debug.log('Incomplete scores for subject:', subjectName, {
           first_ca: result.first_ca,
           second_ca: result.second_ca,
-          exam_score: result.exam_score
+          exam_score: result.exam_score,
+          firstCA_valid: firstCA,
+          secondCA_valid: secondCA,
+          exam_valid: exam
         });
       }
       return isComplete;
     });
 
     debug.log('All scores complete:', allScoresComplete);
+    debug.log('Total subjects:', normalizedStudentSubjectIds.length, 'Results found:', resultSubjectIds.length);
     return allScoresComplete;
   };
 
