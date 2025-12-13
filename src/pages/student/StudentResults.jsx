@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { AlertCircle, Lock } from 'lucide-react';
 import { COLORS } from '../../constants/colors';
 import { useAuth } from '../../contexts/AuthContext';
 import API from '../../services/API';
@@ -18,6 +19,8 @@ const StudentResults = () => {
   const [classHistory, setClassHistory] = useState({});
   const [availableSessionsData, setAvailableSessionsData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isRestricted, setIsRestricted] = useState(false);
+  const [restrictionMessage, setRestrictionMessage] = useState('');
   const { user } = useAuth();
   const { showError, showSuccess } = useNotification();
 
@@ -102,6 +105,18 @@ const StudentResults = () => {
         const response = await API.getStudentResults();
         const responseData = response.data || response;
         
+        // Check if result access is restricted
+        if (responseData.restricted) {
+          setIsRestricted(true);
+          setRestrictionMessage(responseData.message || 'Your result access has been restricted. Please complete your school fees to view your results.');
+          setResults({});
+          setLoading(false);
+          return;
+        }
+        
+        setIsRestricted(false);
+        setRestrictionMessage('');
+        
         // New structure: results grouped by session then term
         const resultsData = responseData.results || {};
         setResults(resultsData);
@@ -178,6 +193,14 @@ const StudentResults = () => {
           }
         }
       } catch (err) {
+        // Check if it's a restriction error
+        if (err.response?.status === 403 && err.response?.data?.restricted) {
+          setIsRestricted(true);
+          setRestrictionMessage(err.response?.data?.message || 'Your result access has been restricted. Please complete your school fees to view your results.');
+          setResults({});
+          setLoading(false);
+          return;
+        }
         showError(err.response?.data?.message || 'Failed to load results');
       } finally {
         setLoading(false);
@@ -541,6 +564,41 @@ const StudentResults = () => {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2" style={{ borderColor: COLORS.primary.red }}></div>
+      </div>
+    );
+  }
+
+  // Show restriction message if access is restricted
+  if (isRestricted) {
+    return (
+      <div className="min-h-screen bg-gray-50 py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="bg-white shadow rounded-lg p-8">
+            <div className="flex flex-col items-center justify-center text-center">
+              <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mb-4">
+                <Lock className="h-8 w-8 text-orange-600" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Result Access Restricted</h2>
+              <div className="max-w-md mt-4">
+                <div className="bg-orange-50 border-l-4 border-orange-400 p-4 rounded-md">
+                  <div className="flex">
+                    <div className="flex-shrink-0">
+                      <AlertCircle className="h-5 w-5 text-orange-400" />
+                    </div>
+                    <div className="ml-3">
+                      <p className="text-sm text-orange-700 whitespace-pre-line">
+                        {restrictionMessage}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <p className="mt-6 text-sm text-gray-500">
+                Please contact the school administration for more information.
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }

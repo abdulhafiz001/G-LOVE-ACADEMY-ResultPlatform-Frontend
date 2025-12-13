@@ -358,6 +358,16 @@ class API {
         return await this.request(`/admin/students/${studentId}`);
     }
 
+    async toggleStudentResultAccess(studentId, restricted, restrictionMessage = null) {
+        return await this.request(`/admin/students/${studentId}/toggle-result-access`, {
+            method: 'POST',
+            body: JSON.stringify({
+                restricted,
+                restriction_message: restrictionMessage,
+            }),
+        });
+    }
+
     // Teacher APIs
     async getTeacherDashboard() {
         return await this.request('/teacher/dashboard');

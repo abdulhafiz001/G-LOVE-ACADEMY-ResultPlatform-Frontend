@@ -20,7 +20,9 @@ import {
   FileText,
   Shield,
   UserCheck,
-  X
+  X,
+  Lock,
+  Unlock
 } from 'lucide-react';
 import { COLORS } from '../../constants/colors';
 import API from '../../services/API';
@@ -28,6 +30,7 @@ import { useNotification } from '../../contexts/NotificationContext';
 import { useAuth } from '../../contexts/AuthContext';
 import DeleteConfirmationModal from '../../components/DeleteConfirmationModal';
 import EditStudentModal from '../../components/EditStudentModal';
+import RestrictResultAccessModal from '../../components/RestrictResultAccessModal';
 import debug from '../../utils/debug';
 
 const Students = () => {
@@ -48,6 +51,7 @@ const Students = () => {
   const [loading, setLoading] = useState(true);
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, student: null });
   const [editModal, setEditModal] = useState({ isOpen: false, student: null });
+  const [restrictModal, setRestrictModal] = useState({ isOpen: false, student: null });
   const [submitting, setSubmitting] = useState(false);
   const [importModal, setImportModal] = useState({ isOpen: false, importing: false, selectedClassId: null });
   const [importResults, setImportResults] = useState(null);
@@ -354,6 +358,55 @@ const Students = () => {
   const closeDeleteModal = useCallback(() => {
     setDeleteModal({ isOpen: false, student: null });
   }, []);
+
+  const openRestrictModal = useCallback((student) => {
+    if (!isAdmin) {
+      showError('Only administrators can restrict result access');
+      return;
+    }
+    setRestrictModal({ isOpen: true, student });
+  }, [isAdmin, showError]);
+
+  const closeRestrictModal = useCallback(() => {
+    setRestrictModal({ isOpen: false, student: null });
+  }, []);
+
+  const handleToggleResultAccess = useCallback(async (restrictionMessage) => {
+    if (!restrictModal.student) return;
+
+    setSubmitting(true);
+    try {
+      const isRestricted = restrictModal.student.result_access_restricted;
+      await API.toggleStudentResultAccess(
+        restrictModal.student.id,
+        !isRestricted,
+        restrictionMessage || null
+      );
+      
+      // Update the student in the list
+      setStudents(prev => prev.map(s => 
+        s.id === restrictModal.student.id 
+          ? { 
+              ...s, 
+              result_access_restricted: !isRestricted,
+              result_restriction_message: !isRestricted ? (restrictionMessage || null) : null
+            }
+          : s
+      ));
+      
+      showSuccess(
+        !isRestricted 
+          ? 'Result access has been restricted for this student'
+          : 'Result access has been restored for this student'
+      );
+      setRestrictModal({ isOpen: false, student: null });
+    } catch (error) {
+      showError(error.response?.data?.message || 'Failed to update result access');
+      debug.error('Error toggling result access:', error);
+    } finally {
+      setSubmitting(false);
+    }
+  }, [restrictModal.student, showSuccess, showError]);
 
   const closeEditModal = useCallback(() => {
     setEditModal({ isOpen: false, student: null });
@@ -677,28 +730,54 @@ const Students = () => {
                           </button>
                         )}
                         {isAdmin && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openDeleteModal(student);
-                            }}
-                            className="p-1 text-gray-400 hover:text-red-600 transition-colors"
-                            title="Delete student"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
+                          <>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openRestrictModal(student);
+                              }}
+                              className={`p-1 transition-colors ${
+                                student.result_access_restricted
+                                  ? 'text-orange-600 hover:text-orange-700'
+                                  : 'text-gray-400 hover:text-orange-600'
+                              }`}
+                              title={student.result_access_restricted ? 'Restore Result Access' : 'Restrict Result Access'}
+                            >
+                              {student.result_access_restricted ? (
+                                <Unlock className="h-4 w-4" />
+                              ) : (
+                                <Lock className="h-4 w-4" />
+                              )}
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openDeleteModal(student);
+                              }}
+                              className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                              title="Delete student"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </>
                         )}
                       </div>
                     </div>
 
                     {/* Student Info */}
                     <div className="space-y-3">
-                      <div className="flex items-center text-sm">
+                      <div className="flex items-center text-sm flex-wrap gap-2">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getClassColorForStudent(student.school_class?.name)}`}>
                           {student.school_class?.name || 'No Class'}
                         </span>
+                        {student.result_access_restricted && (
+                          <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-orange-50 text-orange-700">
+                            <Lock className="mr-1 h-3 w-3" />
+                            Access Restricted
+                          </span>
+                        )}
                         {student.is_form_teacher && (
-                          <span className="ml-2 inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-50 text-green-700">
+                          <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-50 text-green-700">
                             <UserCheck className="mr-1 h-3 w-3" />
                             Form Teacher
                           </span>
@@ -800,12 +879,18 @@ const Students = () => {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex flex-col">
+                        <div className="flex flex-col gap-1">
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getClassColorForStudent(student.school_class?.name)}`}>
                             {student.school_class?.name || 'No Class'}
                           </span>
+                          {student.result_access_restricted && (
+                            <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-orange-50 text-orange-700">
+                              <Lock className="mr-1 h-3 w-3" />
+                              Access Restricted
+                            </span>
+                          )}
                           {student.is_form_teacher && (
-                            <span className="mt-1 inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-50 text-green-700">
+                            <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-50 text-green-700">
                               <UserCheck className="mr-1 h-3 w-3" />
                               Form Teacher
                             </span>
@@ -858,16 +943,36 @@ const Students = () => {
                             </button>
                           )}
                           {isAdmin && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openDeleteModal(student);
-                              }}
-                              className="text-red-600 hover:text-red-900 transition-colors"
-                              title="Delete student"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+                            <>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openRestrictModal(student);
+                                }}
+                                className={`transition-colors ${
+                                  student.result_access_restricted
+                                    ? 'text-orange-600 hover:text-orange-900'
+                                    : 'text-gray-400 hover:text-orange-600'
+                                }`}
+                                title={student.result_access_restricted ? 'Restore Result Access' : 'Restrict Result Access'}
+                              >
+                                {student.result_access_restricted ? (
+                                  <Unlock className="h-4 w-4" />
+                                ) : (
+                                  <Lock className="h-4 w-4" />
+                                )}
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openDeleteModal(student);
+                                }}
+                                className="text-red-600 hover:text-red-900 transition-colors"
+                                title="Delete student"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </>
                           )}
                         </div>
                       </td>
@@ -914,6 +1019,16 @@ const Students = () => {
         onClose={closeEditModal}
         student={editModal.student}
         onSuccess={handleEditSuccess}
+      />
+
+      {/* Restrict Result Access Modal */}
+      <RestrictResultAccessModal
+        isOpen={restrictModal.isOpen}
+        onClose={closeRestrictModal}
+        onConfirm={handleToggleResultAccess}
+        student={restrictModal.student}
+        isRestricted={restrictModal.student?.result_access_restricted || false}
+        isLoading={submitting}
       />
 
       {/* Import Modal */}
