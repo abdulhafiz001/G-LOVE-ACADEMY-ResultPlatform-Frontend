@@ -7,6 +7,10 @@ import { useNotification } from '../../contexts/NotificationContext';
 import debug from '../../utils/debug';
 // Remove html2canvas and jsPDF imports - we'll use simpler methods
 // Dynamic import for download features
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+const ASSET_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, '');
+
 const StudentResults = () => {
   const [selectedTerm, setSelectedTerm] = useState('Second Term');
   const [selectedSession, setSelectedSession] = useState('');
@@ -19,6 +23,7 @@ const StudentResults = () => {
   const [classHistory, setClassHistory] = useState({});
   const [availableSessionsData, setAvailableSessionsData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [stampImageDataUrl, setStampImageDataUrl] = useState(null);
   const [isRestricted, setIsRestricted] = useState(false);
   const [restrictionMessage, setRestrictionMessage] = useState('');
   const { user } = useAuth();
@@ -210,6 +215,40 @@ const StudentResults = () => {
     fetchResults();
   }, []);
 
+  useEffect(() => {
+    const fetchStampImage = async () => {
+      try {
+        const stampResponse = await fetch(`${ASSET_BASE_URL}/images/school-stamp.svg`, {
+          cache: 'no-store',
+        });
+
+        if (!stampResponse.ok) {
+          throw new Error('Failed to load school stamp');
+        }
+
+        const svgText = await stampResponse.text();
+
+        if (typeof window === 'undefined') {
+          return;
+        }
+
+        const base64 = `data:image/svg+xml;base64,${
+          window.btoa(
+            encodeURIComponent(svgText).replace(/%([0-9A-F]{2})/g, (_, p1) =>
+              String.fromCharCode(parseInt(p1, 16))
+            )
+          )
+        }`;
+
+        setStampImageDataUrl(base64);
+      } catch (error) {
+        debug.error('Failed to load school stamp:', error);
+      }
+    };
+
+    fetchStampImage();
+  }, []);
+
   // Update selected term when session changes
   useEffect(() => {
     if (selectedSession && results[selectedSession]) {
@@ -308,7 +347,13 @@ const StudentResults = () => {
       total: total,
       grade: grade,
       gradeRemark: gradeRemark,
-      percentage: total
+      percentage: total,
+      // Preserve position data from backend
+      subject_position: result.subject_position,
+      subject_position_formatted: result.subject_position_formatted,
+      overall_position: result.overall_position,
+      overall_position_formatted: result.overall_position_formatted,
+      total_students_in_class: result.total_students_in_class
     };
     
     return processedResult;
@@ -324,6 +369,10 @@ const StudentResults = () => {
   const scaledResults = getScaledResults(currentResults);
   const totalScore = scaledResults.reduce((sum, result) => sum + result.total, 0);
   const averageScore = scaledResults.length > 0 ? (totalScore / scaledResults.length).toFixed(1) : 0;
+  
+  // Get overall position from first result (all results in same term have same overall position)
+  const overallPositionFormatted = currentResults.length > 0 ? (currentResults[0].overall_position_formatted || 'N/A') : 'N/A';
+  const totalStudentsInClass = currentResults.length > 0 ? (currentResults[0].total_students_in_class || 0) : 0;
 
   // Calculate third term final average (Nigerian school system)
   // Final Average = (First Term Average + Second Term Average + Third Term Average) / 3
@@ -678,32 +727,44 @@ const StudentResults = () => {
               position: relative;
               z-index: 1;
             }
+            .stamp-image {
+              width: 180px;
+              height: 180px;
+              display: block;
+              margin: 0 auto;
+              object-fit: contain;
+            }
             .school-header { 
               text-align: center; 
-              margin-bottom: ${forPrint ? '10px' : '30px'}; 
+              margin-bottom: ${forPrint ? '10px' : '15px'}; 
+              padding-bottom: ${forPrint ? '8px' : '12px'}; 
+              border-bottom: 3px solid #aecb1f;
             }
             .school-logo { 
               width: ${forPrint ? '60px' : '80px'}; 
               height: auto; 
-              margin: 0 auto ${forPrint ? '5px' : '10px'}; 
+              margin: 0 auto ${forPrint ? '5px' : '8px'}; 
               display: block; 
             }
             .school-name { 
-              font-size: ${forPrint ? '16px' : '24px'}; 
+              font-size: ${forPrint ? '16px' : '18px'}; 
               font-weight: bold; 
-              margin: ${forPrint ? '5px 0' : '10px 0'}; 
+              margin: ${forPrint ? '5px 0' : '5px 0'}; 
+              color: #1a202c;
+              text-transform: uppercase;
+              letter-spacing: 1px;
             }
             .school-address { 
-              font-size: ${forPrint ? '10px' : '14px'}; 
+              font-size: ${forPrint ? '9px' : '10px'}; 
               color: #666; 
-              margin-bottom: ${forPrint ? '10px' : '20px'}; 
+              margin: ${forPrint ? '3px 0' : '3px 0'}; 
             }
             .student-info {
-              background: #f9f9f9;
-              padding: ${forPrint ? '8px' : '15px'};
-              margin: ${forPrint ? '10px 0' : '20px 0'};
-              border: 1px solid #ddd;
-              border-radius: 5px;
+              background-color: #f7fafc;
+              padding: ${forPrint ? '10px' : '12px'};
+              margin: ${forPrint ? '10px 0' : '15px 0'};
+              border: 1px solid #e2e8f0;
+              border-radius: 4px;
             }
             .student-info h3 {
               margin: 0 0 10px 0;
@@ -718,70 +779,105 @@ const StudentResults = () => {
               width: 100%; 
               border-collapse: collapse; 
               margin: ${forPrint ? '8px 0' : '20px 0'}; 
-              font-size: ${forPrint ? '9px' : '12px'};
+              font-size: ${forPrint ? '10px' : '12px'};
             }
             th, td { 
-              border: 1px solid #333; 
-              padding: ${forPrint ? '4px' : '8px'}; 
+              border: 1px solid #2d3748; 
+              padding: ${forPrint ? '6px 4px' : '8px'}; 
               text-align: center; 
             }
             th { 
-              background-color: #f5f5f5; 
+              background-color: #aecb1f; 
+              color: white;
               font-weight: bold;
+              font-size: ${forPrint ? '9px' : '11px'};
+            }
+            td {
+              color: #2d3748;
             }
             .text-left { text-align: left; }
             .remarks-section {
-              display: grid;
-              grid-template-columns: 1fr 1fr;
-              gap: ${forPrint ? '10px' : '20px'};
-              margin: ${forPrint ? '10px 0' : '20px 0'};
+              margin-top: ${forPrint ? '10px' : '15px'};
+              display: table;
+              width: 100%;
             }
             .remark-box {
-              border: 1px solid #ddd;
-              padding: ${forPrint ? '8px' : '15px'};
-              background: #f9f9f9;
-              border-radius: 5px;
-              font-size: ${forPrint ? '9px' : '12px'};
+              display: table-cell;
+              width: 48%;
+              border: 1px solid #2d3748;
+              padding: ${forPrint ? '8px' : '10px'};
+              vertical-align: top;
+              background-color: #ffffff;
+              font-size: ${forPrint ? '9px' : '10px'};
+            }
+            .remark-box:first-child {
+              margin-right: 2%;
             }
             .remark-box h4 {
-              margin: 0 0 10px 0;
-              color: #333;
+              font-weight: bold;
+              font-size: ${forPrint ? '9px' : '10px'};
+              margin-bottom: ${forPrint ? '6px' : '8px'};
+              border-bottom: 1px solid #e2e8f0;
+              padding-bottom: ${forPrint ? '4px' : '5px'};
+              color: #2d3748;
+              text-transform: uppercase;
+            }
+            .remark-box p {
+              font-size: ${forPrint ? '8px' : '9px'};
+              line-height: 1.5;
+              color: #4a5568;
+              text-align: justify;
             }
             .grade-scale {
-              margin: ${forPrint ? '10px 0' : '20px 0'};
+              margin-top: ${forPrint ? '10px' : '15px'};
+              font-size: ${forPrint ? '8px' : '9px'};
             }
             .grade-scale h4 {
-              margin-bottom: ${forPrint ? '5px' : '10px'};
-              font-size: ${forPrint ? '11px' : '14px'};
+              font-weight: bold;
+              margin-bottom: ${forPrint ? '6px' : '8px'};
+              font-size: ${forPrint ? '9px' : '10px'};
+              color: #2d3748;
             }
             .grade-table {
-              font-size: ${forPrint ? '8px' : '11px'};
+              font-size: ${forPrint ? '8px' : '9px'};
+            }
+            .grade-table th {
+              background-color: #4a5568;
+              font-size: ${forPrint ? '7px' : '8px'};
+              padding: ${forPrint ? '3px' : '4px'};
+            }
+            .grade-table td {
+              padding: ${forPrint ? '3px' : '4px'};
+              font-size: ${forPrint ? '7px' : '8px'};
             }
             .summary-stats {
-              background: #e8f4f8;
-              padding: ${forPrint ? '8px' : '15px'};
-              border-radius: 5px;
-              margin: ${forPrint ? '10px 0' : '20px 0'};
+              margin-top: ${forPrint ? '10px' : '15px'};
+              display: table;
+              width: 100%;
             }
             .stats-grid {
-              display: grid;
-              grid-template-columns: repeat(3, 1fr);
-              gap: 15px;
-              text-align: center;
+              display: table;
+              width: 100%;
             }
             .stat-item {
-              background: white;
-              padding: 10px;
-              border-radius: 3px;
+              display: table-cell;
+              border: 2px solid #aecb1f;
+              padding: ${forPrint ? '8px' : '10px'};
+              text-align: center;
+              width: 33.33%;
+              background-color: #fff5f5;
             }
             .stat-value {
-              font-size: ${forPrint ? '14px' : '18px'};
+              font-size: ${forPrint ? '16px' : '18px'};
               font-weight: bold;
               color: #aecb1f;
             }
             .stat-label {
-              font-size: ${forPrint ? '9px' : '12px'};
-              color: #666;
+              font-weight: bold;
+              font-size: ${forPrint ? '9px' : '10px'};
+              margin-bottom: 5px;
+              color: #4a5568;
+              text-transform: uppercase;
             }
           </style>
         </head>
@@ -801,7 +897,7 @@ const StudentResults = () => {
               <div class="school-address">${schoolInfo.address}</div>
             </div>
 
-            <h2 style="text-align: center; color: #f30401; margin: ${forPrint ? '10px 0' : '20px 0'}; font-size: ${forPrint ? '14px' : '20px'};">STUDENT RESULT REPORT</h2>
+            <div style="font-size: ${forPrint ? '12px' : '14px'}; font-weight: bold; color: #aecb1f; margin-top: ${forPrint ? '6px' : '8px'}; text-transform: uppercase; letter-spacing: 1px; text-align: center;">STUDENT'S REPORT CARD</div>
 
             <div class="student-info">
               <h3>Student Information</h3>
@@ -831,27 +927,29 @@ const StudentResults = () => {
             <table>
               <thead>
                 <tr>
-                  <th class="text-left">Subject</th>
-                  <th>1st Test (20)</th>
-                  <th>2nd Test (20)</th>
-                  <th>Exam (60)</th>
-                  <th>Total (100)</th>
-                  <th>Grade</th>
-                                     <th>Percentage</th>
-                  <th>Remark</th>
+                  <th style="width: 4%;">S/N</th>
+                  <th class="text-left" style="width: 20%;">Subject</th>
+                  <th style="width: 8%;">1st CA</th>
+                  <th style="width: 8%;">2nd CA</th>
+                  <th style="width: 8%;">Exam</th>
+                  <th style="width: 8%;">Total</th>
+                  <th style="width: 8%;">Position</th>
+                  <th style="width: 8%;">Grade</th>
+                  <th style="width: 20%;">Remark</th>
                 </tr>
               </thead>
               <tbody>
-                ${scaledResults.map(result => `
+                ${scaledResults.map((result, index) => `
                   <tr>
+                    <td>${index + 1}</td>
                     <td class="text-left">${result.subject}</td>
                     <td>${result.first_ca}</td>
                     <td>${result.second_ca}</td>
                     <td>${result.exam}</td>
-                    <td>${result.total}</td>
-                    <td>${result.grade}</td>
-                                         <td>${result.percentage}%</td>
-                    <td>${result.remark}</td>
+                    <td><strong>${result.total}</strong></td>
+                    <td><strong>${result.subject_position_formatted || '-'}</strong></td>
+                    <td><strong>${result.grade}</strong></td>
+                    <td>${result.remark || '-'}</td>
                   </tr>
                 `).join('')}
               </tbody>
@@ -868,10 +966,10 @@ const StudentResults = () => {
                   <div class="stat-value">${averageScore}%</div>
                   <div class="stat-label">Average Score</div>
                 </div>
-                                 <div class="stat-item">
-                   <div class="stat-value">${scaledResults.length}</div>
-                   <div class="stat-label">Total Subjects</div>
-                 </div>
+                <div class="stat-item">
+                  <div class="stat-value">${overallPositionFormatted}<span style="font-size: ${forPrint ? '10px' : '12px'}; color: #666;">/${totalStudentsInClass}</span></div>
+                  <div class="stat-label">Overall Position</div>
+                </div>
               </div>
             </div>
 
@@ -937,6 +1035,26 @@ const StudentResults = () => {
                 </tbody>
               </table>
             </div>
+
+            <!-- School Stamp -->
+            <div style="margin-top: 20px; display: table; width: 100%;">
+              <div style="display: table-cell; width: 100%; text-align: center; padding: 10px; vertical-align: middle;">
+                ${stampImageDataUrl ? `
+                  <img src="${stampImageDataUrl}" alt="School Stamp" class="stamp-image" />
+                ` : `
+                  <div style="display: inline-block; width: 180px; height: 180px; position: relative; margin: 0 auto;">
+                    <div style="width: 100%; height: 100%; border: 3px solid #000; border-radius: 50%; position: absolute; top: 0; left: 0;"></div>
+                    <div style="width: 75%; height: 75%; border: 1px dashed #000; border-radius: 50%; position: absolute; top: 12.5%; left: 12.5%;"></div>
+                    <div style="position: absolute; top: 15%; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: bold; color: #000; white-space: nowrap;">G-LOVE ACADEMY</div>
+                    <div style="position: absolute; left: 10%; top: 50%; transform: translateY(-50%) rotate(-90deg); font-size: 9px; color: #000; white-space: nowrap;">LUGBE ABUJA</div>
+                    <div style="position: absolute; top: 40%; left: 50%; transform: translateX(-50%); font-size: 9px; font-weight: bold; color: #000;">DATE</div>
+                    <div style="position: absolute; top: 45%; left: 20%; width: 60%; border-top: 1px dashed #000;"></div>
+                    <div style="position: absolute; top: 55%; left: 50%; transform: translateX(-50%); font-size: 9px; font-weight: bold; color: #000;">SIGN.</div>
+                    <div style="position: absolute; top: 60%; left: 30%; width: 40%; height: 15px; border-bottom: 2px solid #0066cc; transform: rotate(-5deg);"></div>
+                  </div>
+                `}
+              </div>
+            </div>
           </div>
         </body>
       </html>
@@ -947,7 +1065,7 @@ const StudentResults = () => {
   // Print Result - Same clean format as downloads
   const handlePrintResult = () => {
     try {
-      const htmlContent = generateCleanHTML();
+      const htmlContent = generateCleanHTML(true);
       const newWindow = window.open('', '_blank');
       newWindow.document.write(htmlContent);
       newWindow.document.close();
