@@ -23,6 +23,7 @@ const StudentResults = () => {
   const [classHistory, setClassHistory] = useState({});
   const [availableSessionsData, setAvailableSessionsData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [stampImageDataUrl, setStampImageDataUrl] = useState(null);
   const [isRestricted, setIsRestricted] = useState(false);
   const [restrictionMessage, setRestrictionMessage] = useState('');
@@ -1082,6 +1083,8 @@ const StudentResults = () => {
 
   // Download as PDF - Using backend PDF generation
   const handleDownloadPDF = async () => {
+    if (isDownloading) return;
+
     try {
       // Validate that we have required data
       if (!selectedTerm) {
@@ -1125,6 +1128,8 @@ const StudentResults = () => {
         showError('Could not find academic session. Please contact the administrator.');
         return;
       }
+
+      setIsDownloading(true);
       
       const params = {
         term: term,
@@ -1138,6 +1143,8 @@ const StudentResults = () => {
       const errorMessage = error.message || 'Failed to generate PDF report card. Please ensure you are logged in and have the required permissions.';
       showError(errorMessage);
       debug.error('PDF generation error:', error);
+    } finally {
+      setIsDownloading(false);
     }
   };
 
@@ -1506,10 +1513,11 @@ const StudentResults = () => {
               </button>
               <button
                 onClick={handleDownloadPDF}
-                className="px-4 py-2 text-sm font-medium text-white rounded-md hover:opacity-90 transition-opacity duration-200"
+                disabled={isDownloading}
+                className={`px-4 py-2 text-sm font-medium text-white rounded-md transition-opacity duration-200 ${isDownloading ? 'opacity-70 cursor-not-allowed' : 'hover:opacity-90'}`}
                 style={{ backgroundColor: COLORS.primary.red }}
               >
-                Download PDF
+                {isDownloading ? 'Downloading...' : 'Download PDF'}
               </button>
             </div>
           ) : (
