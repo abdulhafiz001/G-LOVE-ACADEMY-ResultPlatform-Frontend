@@ -967,7 +967,7 @@ const StudentResults = () => {
                   <div class="stat-label">Average Score</div>
                 </div>
                 <div class="stat-item">
-                  <div class="stat-value">${overallPositionFormatted}<span style="font-size: ${forPrint ? '10px' : '12px'}; color: #666;">/${totalStudentsInClass}</span></div>
+                  <div class="stat-value">${overallPositionFormatted}</div>
                   <div class="stat-label">Overall Position</div>
                 </div>
               </div>

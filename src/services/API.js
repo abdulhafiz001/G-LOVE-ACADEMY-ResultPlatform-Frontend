@@ -691,10 +691,36 @@ class API {
         }
 
         const blob = await response.blob();
+        
+        // Extract filename from Content-Disposition header if available
+        let filename = `report_card_${studentId}_${params.term || 'term'}.pdf`;
+        const contentDisposition = response.headers.get('content-disposition');
+        if (contentDisposition) {
+            // Try to extract filename from Content-Disposition header
+            // Handles: filename="value", filename=value, filename*=UTF-8''value
+            let extractedFilename = null;
+            
+            // Try RFC 5987 format first (filename*=UTF-8''value)
+            const rfc5987Match = contentDisposition.match(/filename\*=UTF-8''(.+)/i);
+            if (rfc5987Match) {
+                extractedFilename = decodeURIComponent(rfc5987Match[1]);
+            } else {
+                // Try standard format (filename="value" or filename=value)
+                const standardMatch = contentDisposition.match(/filename=["']?([^"';]+)["']?/i);
+                if (standardMatch) {
+                    extractedFilename = standardMatch[1].trim();
+                }
+            }
+            
+            if (extractedFilename) {
+                filename = extractedFilename;
+            }
+        }
+        
         const downloadUrl = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = downloadUrl;
-        link.download = `report_card_${studentId}_${params.term || 'term'}.pdf`;
+        link.download = filename;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -748,10 +774,36 @@ class API {
         }
 
         const blob = await response.blob();
+        
+        // Extract filename from Content-Disposition header if available
+        let filename = `my_report_card_${params.term || 'term'}.pdf`;
+        const contentDisposition = response.headers.get('content-disposition');
+        if (contentDisposition) {
+            // Try to extract filename from Content-Disposition header
+            // Handles: filename="value", filename=value, filename*=UTF-8''value
+            let extractedFilename = null;
+            
+            // Try RFC 5987 format first (filename*=UTF-8''value)
+            const rfc5987Match = contentDisposition.match(/filename\*=UTF-8''(.+)/i);
+            if (rfc5987Match) {
+                extractedFilename = decodeURIComponent(rfc5987Match[1]);
+            } else {
+                // Try standard format (filename="value" or filename=value)
+                const standardMatch = contentDisposition.match(/filename=["']?([^"';]+)["']?/i);
+                if (standardMatch) {
+                    extractedFilename = standardMatch[1].trim();
+                }
+            }
+            
+            if (extractedFilename) {
+                filename = extractedFilename;
+            }
+        }
+        
         const downloadUrl = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = downloadUrl;
-        link.download = `my_report_card_${params.term || 'term'}.pdf`;
+        link.download = filename;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
