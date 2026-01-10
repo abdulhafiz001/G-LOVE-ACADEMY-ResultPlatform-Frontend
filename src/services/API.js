@@ -879,6 +879,180 @@ class API {
         return { success: true };
     }
 
+    async exportStudentsByClass(classId) {
+        const url = `${this.baseURL}/admin/students/export-by-class?class_id=${classId}`;
+        const headers = this.getHeaders();
+        
+        const response = await fetch(url, {
+            headers: {
+                ...headers,
+                'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            },
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || 'Failed to export students');
+        }
+
+        const blob = await response.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = `students_basic_export_${new Date().toISOString().split('T')[0]}.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(downloadUrl);
+
+        return { success: true };
+    }
+
+    async exportStudentsByClassWithSubjects(classId) {
+        const url = `${this.baseURL}/admin/students/export-by-class-with-subjects?class_id=${classId}`;
+        const headers = this.getHeaders();
+        
+        const response = await fetch(url, {
+            headers: {
+                ...headers,
+                'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            },
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || 'Failed to export students');
+        }
+
+        const blob = await response.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = `students_with_subjects_export_${new Date().toISOString().split('T')[0]}.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(downloadUrl);
+
+        return { success: true };
+    }
+
+    async exportClasses() {
+        const url = `${this.baseURL}/admin/classes/export`;
+        const headers = this.getHeaders();
+        
+        const response = await fetch(url, {
+            headers: {
+                ...headers,
+                'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            },
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || 'Failed to export classes');
+        }
+
+        const blob = await response.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = `classes_export_${new Date().toISOString().split('T')[0]}.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(downloadUrl);
+
+        return { success: true };
+    }
+
+    async exportSubjects() {
+        const url = `${this.baseURL}/admin/subjects/export`;
+        const headers = this.getHeaders();
+        
+        const response = await fetch(url, {
+            headers: {
+                ...headers,
+                'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            },
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || 'Failed to export subjects');
+        }
+
+        const blob = await response.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = `subjects_export_${new Date().toISOString().split('T')[0]}.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(downloadUrl);
+
+        return { success: true };
+    }
+
+    async exportTeachers() {
+        const url = `${this.baseURL}/admin/teachers/export`;
+        const headers = this.getHeaders();
+        
+        const response = await fetch(url, {
+            headers: {
+                ...headers,
+                'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            },
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || 'Failed to export teachers');
+        }
+
+        const blob = await response.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = `teachers_export_${new Date().toISOString().split('T')[0]}.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(downloadUrl);
+
+        return { success: true };
+    }
+
+    async exportScoresByClassSubject(classId, subjectId) {
+        const url = `${this.baseURL}/admin/scores/export-by-class-subject?class_id=${classId}&subject_id=${subjectId}`;
+        const headers = this.getHeaders();
+        
+        const response = await fetch(url, {
+            headers: {
+                ...headers,
+                'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            },
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || 'Failed to export scores');
+        }
+
+        const blob = await response.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = `scores_export_${new Date().toISOString().split('T')[0]}.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(downloadUrl);
+
+        return { success: true };
+    }
+
     async downloadStudentTemplate() {
         // Use teacher endpoint if user is a teacher, otherwise use admin endpoint
         const user = JSON.parse(localStorage.getItem('user') || '{}');

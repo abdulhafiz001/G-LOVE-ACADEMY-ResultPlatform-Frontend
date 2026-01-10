@@ -1043,16 +1043,16 @@ const StudentResults = () => {
                 ${stampImageDataUrl ? `
                   <img src="${stampImageDataUrl}" alt="School Stamp" class="stamp-image" />
                 ` : `
-                  <div style="display: inline-block; width: 180px; height: 180px; position: relative; margin: 0 auto;">
-                    <div style="width: 100%; height: 100%; border: 3px solid #000; border-radius: 50%; position: absolute; top: 0; left: 0;"></div>
-                    <div style="width: 75%; height: 75%; border: 1px dashed #000; border-radius: 50%; position: absolute; top: 12.5%; left: 12.5%;"></div>
-                    <div style="position: absolute; top: 15%; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: bold; color: #000; white-space: nowrap;">G-LOVE ACADEMY</div>
-                    <div style="position: absolute; left: 10%; top: 50%; transform: translateY(-50%) rotate(-90deg); font-size: 9px; color: #000; white-space: nowrap;">LUGBE ABUJA</div>
-                    <div style="position: absolute; top: 40%; left: 50%; transform: translateX(-50%); font-size: 9px; font-weight: bold; color: #000;">DATE</div>
-                    <div style="position: absolute; top: 45%; left: 20%; width: 60%; border-top: 1px dashed #000;"></div>
-                    <div style="position: absolute; top: 55%; left: 50%; transform: translateX(-50%); font-size: 9px; font-weight: bold; color: #000;">SIGN.</div>
-                    <div style="position: absolute; top: 60%; left: 30%; width: 40%; height: 15px; border-bottom: 2px solid #0066cc; transform: rotate(-5deg);"></div>
-                  </div>
+                <div style="display: inline-block; width: 180px; height: 180px; position: relative; margin: 0 auto;">
+                  <div style="width: 100%; height: 100%; border: 3px solid #000; border-radius: 50%; position: absolute; top: 0; left: 0;"></div>
+                  <div style="width: 75%; height: 75%; border: 1px dashed #000; border-radius: 50%; position: absolute; top: 12.5%; left: 12.5%;"></div>
+                  <div style="position: absolute; top: 15%; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: bold; color: #000; white-space: nowrap;">G-LOVE ACADEMY</div>
+                  <div style="position: absolute; left: 10%; top: 50%; transform: translateY(-50%) rotate(-90deg); font-size: 9px; color: #000; white-space: nowrap;">LUGBE ABUJA</div>
+                  <div style="position: absolute; top: 40%; left: 50%; transform: translateX(-50%); font-size: 9px; font-weight: bold; color: #000;">DATE</div>
+                  <div style="position: absolute; top: 45%; left: 20%; width: 60%; border-top: 1px dashed #000;"></div>
+                  <div style="position: absolute; top: 55%; left: 50%; transform: translateX(-50%); font-size: 9px; font-weight: bold; color: #000;">SIGN.</div>
+                  <div style="position: absolute; top: 60%; left: 30%; width: 40%; height: 15px; border-bottom: 2px solid #0066cc; transform: rotate(-5deg);"></div>
+                </div>
                 `}
               </div>
             </div>

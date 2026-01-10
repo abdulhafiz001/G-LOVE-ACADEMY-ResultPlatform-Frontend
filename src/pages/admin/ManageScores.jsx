@@ -52,6 +52,12 @@ const ManageScores = () => {
     selectedClassId: null, 
     selectedSubjectId: null 
   });
+  const [exportModal, setExportModal] = useState({ 
+    isOpen: false, 
+    exporting: false, 
+    selectedClassId: null, 
+    selectedSubjectId: null 
+  });
   const [importResults, setImportResults] = useState(null);
   const [currentSession, setCurrentSession] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
@@ -154,11 +160,23 @@ const ManageScores = () => {
       ]);
       
       // Handle different response formats
-      const classes = Array.isArray(classesResponse) ? classesResponse : 
-                     (classesResponse?.data && Array.isArray(classesResponse.data)) ? classesResponse.data : [];
+      let classes = [];
+      if (Array.isArray(classesResponse)) {
+        classes = classesResponse;
+      } else if (classesResponse?.data?.data && Array.isArray(classesResponse.data.data)) {
+        classes = classesResponse.data.data;
+      } else if (classesResponse?.data && Array.isArray(classesResponse.data)) {
+        classes = classesResponse.data;
+      }
       
-      const subjects = Array.isArray(subjectsResponse) ? subjectsResponse : 
-                      (subjectsResponse?.data && Array.isArray(subjectsResponse.data)) ? subjectsResponse.data : [];
+      let subjects = [];
+      if (Array.isArray(subjectsResponse)) {
+        subjects = subjectsResponse;
+      } else if (subjectsResponse?.data?.data && Array.isArray(subjectsResponse.data.data)) {
+        subjects = subjectsResponse.data.data;
+      } else if (subjectsResponse?.data && Array.isArray(subjectsResponse.data)) {
+        subjects = subjectsResponse.data;
+      }
       
       debug.component('ManageScores', 'fetchAdminData - Data loaded', { 
         classesCount: classes.length, 
@@ -628,16 +646,13 @@ const ManageScores = () => {
         </div>
         <div className="flex space-x-3">
           <button 
-            onClick={async () => {
-              try {
-                const params = {};
-                if (selectedClass) params.class_id = selectedClass;
-                if (term) params.term = term;
-                await API.exportScores(params);
-                showSuccess('Scores exported successfully');
-              } catch (error) {
-                showError(error.message || 'Failed to export scores');
-              }
+            onClick={() => {
+              setExportModal({ 
+                isOpen: true, 
+                exporting: false,
+                selectedClassId: null,
+                selectedSubjectId: null
+              });
             }}
             className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
           >
@@ -1439,6 +1454,183 @@ const ManageScores = () => {
                   className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
                 >
                   Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Export Modal */}
+      {exportModal.isOpen && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+          <div className="relative bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Export Scores</h3>
+                <button
+                  onClick={() => setExportModal({ 
+                    isOpen: false, 
+                    exporting: false,
+                    selectedClassId: null,
+                    selectedSubjectId: null
+                  })}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="mb-4">
+                <p className="text-sm text-gray-600 mb-4">
+                  Select a class and subject to export scores for students in that class and subject.
+                </p>
+              </div>
+
+              {/* Class Selection */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Select Class <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={exportModal.selectedClassId || ''}
+                  onChange={(e) => {
+                    const classId = e.target.value;
+                    setExportModal({ 
+                      ...exportModal, 
+                      selectedClassId: classId,
+                      selectedSubjectId: '' // Clear subject when class changes
+                    });
+                  }}
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                  required
+                >
+                  <option value="">-- Select a class --</option>
+                  {availableClasses && availableClasses.length > 0 ? (
+                    availableClasses.map((classItem) => {
+                      // Handle different response structures
+                      const classId = classItem.id;
+                      const className = classItem.name;
+                      
+                      if (!classId || !className) {
+                        return null;
+                      }
+                      
+                      return (
+                        <option key={classId} value={classId}>
+                          {className}
+                        </option>
+                      );
+                    })
+                  ) : (
+                    <option value="" disabled>No classes available</option>
+                  )}
+                </select>
+              </div>
+
+              {/* Subject Selection */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Select Subject <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={exportModal.selectedSubjectId || ''}
+                  onChange={(e) => setExportModal({ 
+                    ...exportModal, 
+                    selectedSubjectId: e.target.value 
+                  })}
+                  disabled={user?.role === 'teacher' && !exportModal.selectedClassId}
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  required
+                >
+                  <option value="">-- Select a subject --</option>
+                  {(() => {
+                    // For admin, show all subjects (not filtered by class)
+                    if (user?.role === 'admin') {
+                      return availableSubjects.map((subject) => (
+                        <option key={subject.id} value={subject.id}>
+                          {subject.name}
+                        </option>
+                      ));
+                    }
+                    
+                    // For teachers, only show subjects when class is selected
+                    if (!exportModal.selectedClassId) {
+                      return null;
+                    }
+                    
+                    // For teachers, show subjects from the selected class
+                    const selectedClass = availableClasses.find(c => {
+                      const classId = c.id;
+                      return classId == exportModal.selectedClassId;
+                    });
+                    
+                    const subjects = selectedClass?.subjects || [];
+                    return subjects.map((subject) => {
+                      const subjectId = subject.id || subject.subject?.id;
+                      const subjectName = subject.name || subject.subject?.name;
+                      
+                      if (!subjectId || !subjectName) return null;
+                      
+                      return (
+                        <option key={subjectId} value={subjectId}>
+                          {subjectName}
+                        </option>
+                      );
+                    });
+                  })()}
+                </select>
+              </div>
+
+              {exportModal.exporting && (
+                <div className="flex items-center justify-center py-4">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                  <span className="ml-2 text-sm text-gray-600">Exporting...</span>
+                </div>
+              )}
+
+              <div className="flex justify-end mt-6 space-x-3">
+                <button
+                  onClick={() => setExportModal({ 
+                    isOpen: false, 
+                    exporting: false,
+                    selectedClassId: null,
+                    selectedSubjectId: null
+                  })}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!exportModal.selectedClassId || !exportModal.selectedSubjectId) {
+                      showError('Please select both class and subject');
+                      return;
+                    }
+
+                    setExportModal({ ...exportModal, exporting: true });
+                    try {
+                      await API.exportScoresByClassSubject(
+                        exportModal.selectedClassId,
+                        exportModal.selectedSubjectId
+                      );
+                      showSuccess('Scores exported successfully');
+                      setExportModal({ 
+                        isOpen: false, 
+                        exporting: false,
+                        selectedClassId: null,
+                        selectedSubjectId: null
+                      });
+                    } catch (error) {
+                      showError(error.message || 'Failed to export scores');
+                    } finally {
+                      setExportModal({ ...exportModal, exporting: false });
+                    }
+                  }}
+                  disabled={!exportModal.selectedClassId || !exportModal.selectedSubjectId || exportModal.exporting}
+                  className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Export Scores
                 </button>
               </div>
             </div>
