@@ -55,9 +55,13 @@ const ManageScores = () => {
   const [exportModal, setExportModal] = useState({ 
     isOpen: false, 
     exporting: false, 
+    selectedTeacherId: null,
     selectedClassId: null, 
-    selectedSubjectId: null 
+    selectedSubjectIds: [] // Array for multiple subjects
   });
+  const [teachers, setTeachers] = useState([]);
+  const [teacherClasses, setTeacherClasses] = useState([]);
+  const [teacherSubjects, setTeacherSubjects] = useState([]);
   const [importResults, setImportResults] = useState(null);
   const [currentSession, setCurrentSession] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
@@ -71,10 +75,81 @@ const ManageScores = () => {
       fetchTeacherAssignments();
     } else if (user?.role === 'admin') {
       fetchAdminData();
+      fetchTeachers(); // Fetch teachers for export modal
     }
     // Fetch current academic session and term
     fetchCurrentSessionAndTerm();
   }, [user]);
+
+  // Fetch teachers for admin export modal
+  const fetchTeachers = async () => {
+    try {
+      const response = await API.getUsers();
+      let usersData = [];
+      
+      if (response && response.data) {
+        if (Array.isArray(response.data)) {
+          usersData = response.data;
+        } else if (response.data.data && Array.isArray(response.data.data)) {
+          usersData = response.data.data;
+        }
+      }
+      
+      const teachersData = usersData.filter(user => user.role === 'teacher' && user.is_active);
+      setTeachers(teachersData);
+    } catch (error) {
+      debug.error('Error fetching teachers:', error);
+      showError('Failed to load teachers');
+    }
+  };
+
+  // Fetch teacher's classes and subjects when teacher is selected
+  const fetchTeacherClassesAndSubjects = async (teacherId) => {
+    if (!teacherId) {
+      setTeacherClasses([]);
+      setTeacherSubjects([]);
+      return;
+    }
+
+    try {
+      // Get teacher assignments
+      const response = await API.getTeacherAssignments();
+      let assignmentsData = [];
+      
+      if (response && response.data) {
+        if (Array.isArray(response.data)) {
+          assignmentsData = response.data;
+        } else if (response.data.data && Array.isArray(response.data.data)) {
+          assignmentsData = response.data.data;
+        }
+      }
+
+      // Filter assignments for selected teacher
+      const teacherAssignments = assignmentsData.filter(assignment => 
+        assignment.teacher_id == teacherId && assignment.is_active
+      );
+
+      // Get unique classes
+      const classesMap = new Map();
+      teacherAssignments.forEach(assignment => {
+        const classId = assignment.class_id || assignment.schoolClass?.id || assignment.school_class?.id;
+        const className = assignment.schoolClass?.name || assignment.school_class?.name || assignment.class?.name;
+        if (classId && className && !classesMap.has(classId)) {
+          classesMap.set(classId, {
+            id: classId,
+            name: className
+          });
+        }
+      });
+      setTeacherClasses(Array.from(classesMap.values()));
+
+      // Get subjects for selected class (will be filtered when class is selected)
+      setTeacherSubjects(teacherAssignments);
+    } catch (error) {
+      debug.error('Error fetching teacher assignments:', error);
+      showError('Failed to load teacher assignments');
+    }
+  };
 
   // Fetch current academic session and term
   const fetchCurrentSessionAndTerm = async () => {
@@ -650,9 +725,13 @@ const ManageScores = () => {
               setExportModal({ 
                 isOpen: true, 
                 exporting: false,
+                selectedTeacherId: null,
                 selectedClassId: null,
-                selectedSubjectId: null
+                selectedSubjectIds: []
               });
+              if (user?.role === 'admin') {
+                fetchTeachers();
+              }
             }}
             className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
           >
@@ -1462,9 +1541,9 @@ const ManageScores = () => {
       )}
 
       {/* Export Modal */}
-      {exportModal.isOpen && (
+      {exportModal.isOpen && user?.role === 'admin' && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
-          <div className="relative bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4">
+          <div className="relative bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-900">Export Scores</h3>
@@ -1472,8 +1551,9 @@ const ManageScores = () => {
                   onClick={() => setExportModal({ 
                     isOpen: false, 
                     exporting: false,
+                    selectedTeacherId: null,
                     selectedClassId: null,
-                    selectedSubjectId: null
+                    selectedSubjectIds: []
                   })}
                   className="text-gray-400 hover:text-gray-600"
                 >
@@ -1483,8 +1563,37 @@ const ManageScores = () => {
 
               <div className="mb-4">
                 <p className="text-sm text-gray-600 mb-4">
-                  Select a class and subject to export scores for students in that class and subject.
+                  Select a teacher, then their class, and select the subjects you want to export scores for.
                 </p>
+              </div>
+
+              {/* Teacher Selection */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Select Teacher <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={exportModal.selectedTeacherId || ''}
+                  onChange={(e) => {
+                    const teacherId = e.target.value;
+                    fetchTeacherClassesAndSubjects(teacherId);
+                    setExportModal({ 
+                      ...exportModal, 
+                      selectedTeacherId: teacherId,
+                      selectedClassId: null,
+                      selectedSubjectIds: []
+                    });
+                  }}
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                  required
+                >
+                  <option value="">-- Select a teacher --</option>
+                  {teachers.map((teacher) => (
+                    <option key={teacher.id} value={teacher.id}>
+                      {teacher.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Class Selection */}
@@ -1496,91 +1605,109 @@ const ManageScores = () => {
                   value={exportModal.selectedClassId || ''}
                   onChange={(e) => {
                     const classId = e.target.value;
+                    // Get all subjects for this class and teacher, then select them all by default
+                    const filteredSubjects = teacherSubjects.filter(assignment => {
+                      const assignmentClassId = assignment.class_id || assignment.schoolClass?.id || assignment.school_class?.id;
+                      return assignmentClassId == classId;
+                    });
+                    
+                    // Get unique subject IDs
+                    const subjectsMap = new Map();
+                    filteredSubjects.forEach(assignment => {
+                      const subjectId = assignment.subject_id || assignment.subject?.id;
+                      if (subjectId && !subjectsMap.has(subjectId)) {
+                        subjectsMap.set(subjectId, subjectId);
+                      }
+                    });
+                    
+                    const allSubjectIds = Array.from(subjectsMap.values());
+                    
                     setExportModal({ 
                       ...exportModal, 
                       selectedClassId: classId,
-                      selectedSubjectId: '' // Clear subject when class changes
+                      selectedSubjectIds: allSubjectIds // Select all subjects by default
                     });
                   }}
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                  required
-                >
-                  <option value="">-- Select a class --</option>
-                  {availableClasses && availableClasses.length > 0 ? (
-                    availableClasses.map((classItem) => {
-                      // Handle different response structures
-                      const classId = classItem.id;
-                      const className = classItem.name;
-                      
-                      if (!classId || !className) {
-                        return null;
-                      }
-                      
-                      return (
-                        <option key={classId} value={classId}>
-                          {className}
-                        </option>
-                      );
-                    })
-                  ) : (
-                    <option value="" disabled>No classes available</option>
-                  )}
-                </select>
-              </div>
-
-              {/* Subject Selection */}
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Select Subject <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={exportModal.selectedSubjectId || ''}
-                  onChange={(e) => setExportModal({ 
-                    ...exportModal, 
-                    selectedSubjectId: e.target.value 
-                  })}
-                  disabled={user?.role === 'teacher' && !exportModal.selectedClassId}
+                  disabled={!exportModal.selectedTeacherId}
                   className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                   required
                 >
-                  <option value="">-- Select a subject --</option>
-                  {(() => {
-                    // For admin, show all subjects (not filtered by class)
-                    if (user?.role === 'admin') {
-                      return availableSubjects.map((subject) => (
-                        <option key={subject.id} value={subject.id}>
-                          {subject.name}
-                        </option>
-                      ));
-                    }
-                    
-                    // For teachers, only show subjects when class is selected
-                    if (!exportModal.selectedClassId) {
-                      return null;
-                    }
-                    
-                    // For teachers, show subjects from the selected class
-                    const selectedClass = availableClasses.find(c => {
-                      const classId = c.id;
-                      return classId == exportModal.selectedClassId;
-                    });
-                    
-                    const subjects = selectedClass?.subjects || [];
-                    return subjects.map((subject) => {
-                      const subjectId = subject.id || subject.subject?.id;
-                      const subjectName = subject.name || subject.subject?.name;
-                      
-                      if (!subjectId || !subjectName) return null;
-                      
-                      return (
-                        <option key={subjectId} value={subjectId}>
-                          {subjectName}
-                        </option>
-                      );
-                    });
-                  })()}
+                  <option value="">-- Select a class --</option>
+                  {teacherClasses.map((classItem) => (
+                    <option key={classItem.id} value={classItem.id}>
+                      {classItem.name}
+                    </option>
+                  ))}
                 </select>
               </div>
+
+              {/* Subject Selection - Checkboxes */}
+              {exportModal.selectedClassId && (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Subjects <span className="text-red-500">*</span>
+                  </label>
+                  <div className="border border-gray-300 rounded-md p-3 max-h-48 overflow-y-auto">
+                    {(() => {
+                      // Filter subjects for selected teacher and class
+                      const filteredSubjects = teacherSubjects.filter(assignment => {
+                        const assignmentClassId = assignment.class_id || assignment.schoolClass?.id || assignment.school_class?.id;
+                        return assignmentClassId == exportModal.selectedClassId;
+                      });
+
+                      // Get unique subjects
+                      const subjectsMap = new Map();
+                      filteredSubjects.forEach(assignment => {
+                        const subjectId = assignment.subject_id || assignment.subject?.id;
+                        const subjectName = assignment.subject?.name;
+                        if (subjectId && subjectName && !subjectsMap.has(subjectId)) {
+                          subjectsMap.set(subjectId, {
+                            id: subjectId,
+                            name: subjectName
+                          });
+                        }
+                      });
+
+                      const uniqueSubjects = Array.from(subjectsMap.values());
+
+                      if (uniqueSubjects.length === 0) {
+                        return (
+                          <p className="text-sm text-gray-500">No subjects found for this teacher and class combination.</p>
+                        );
+                      }
+
+                      return (
+                        <div className="space-y-2">
+                          {uniqueSubjects.map((subject) => (
+                            <label key={subject.id} className="flex items-center">
+                              <input
+                                type="checkbox"
+                                checked={exportModal.selectedSubjectIds.includes(subject.id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setExportModal({
+                                      ...exportModal,
+                                      selectedSubjectIds: [...exportModal.selectedSubjectIds, subject.id]
+                                    });
+                                  } else {
+                                    setExportModal({
+                                      ...exportModal,
+                                      selectedSubjectIds: exportModal.selectedSubjectIds.filter(id => id !== subject.id)
+                                    });
+                                  }
+                                }}
+                                className="h-4 w-4 rounded border-gray-300 focus:ring-2"
+                                style={{ '--tw-ring-color': COLORS.primary.red }}
+                              />
+                              <span className="ml-2 text-sm text-gray-700">{subject.name}</span>
+                            </label>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              )}
 
               {exportModal.exporting && (
                 <div className="flex items-center justify-center py-4">
@@ -1594,8 +1721,9 @@ const ManageScores = () => {
                   onClick={() => setExportModal({ 
                     isOpen: false, 
                     exporting: false,
+                    selectedTeacherId: null,
                     selectedClassId: null,
-                    selectedSubjectId: null
+                    selectedSubjectIds: []
                   })}
                   className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
                 >
@@ -1603,23 +1731,30 @@ const ManageScores = () => {
                 </button>
                 <button
                   onClick={async () => {
-                    if (!exportModal.selectedClassId || !exportModal.selectedSubjectId) {
-                      showError('Please select both class and subject');
+                    if (!exportModal.selectedTeacherId || !exportModal.selectedClassId || exportModal.selectedSubjectIds.length === 0) {
+                      showError('Please select teacher, class, and at least one subject');
                       return;
                     }
 
                     setExportModal({ ...exportModal, exporting: true });
                     try {
-                      await API.exportScoresByClassSubject(
+                      const selectedTeacher = teachers.find(t => t.id == exportModal.selectedTeacherId);
+                      const selectedClass = teacherClasses.find(c => c.id == exportModal.selectedClassId);
+                      
+                      await API.exportScoresByTeacherClassSubjects(
+                        exportModal.selectedTeacherId,
                         exportModal.selectedClassId,
-                        exportModal.selectedSubjectId
+                        exportModal.selectedSubjectIds,
+                        selectedTeacher?.name || 'Teacher',
+                        selectedClass?.name || 'Class'
                       );
                       showSuccess('Scores exported successfully');
                       setExportModal({ 
                         isOpen: false, 
                         exporting: false,
+                        selectedTeacherId: null,
                         selectedClassId: null,
-                        selectedSubjectId: null
+                        selectedSubjectIds: []
                       });
                     } catch (error) {
                       showError(error.message || 'Failed to export scores');
@@ -1627,7 +1762,7 @@ const ManageScores = () => {
                       setExportModal({ ...exportModal, exporting: false });
                     }
                   }}
-                  disabled={!exportModal.selectedClassId || !exportModal.selectedSubjectId || exportModal.exporting}
+                  disabled={!exportModal.selectedTeacherId || !exportModal.selectedClassId || exportModal.selectedSubjectIds.length === 0 || exportModal.exporting}
                   className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Export Scores

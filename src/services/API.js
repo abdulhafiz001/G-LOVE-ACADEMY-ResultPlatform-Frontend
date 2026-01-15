@@ -1053,6 +1053,63 @@ class API {
         return { success: true };
     }
 
+    async exportScoresByTeacherClassSubjects(teacherId, classId, subjectIds, teacherName, className) {
+        const url = `${this.baseURL}/admin/scores/export-by-teacher-class-subjects`;
+        const headers = this.getHeaders();
+        
+        // Set Content-Type for JSON request body, but Accept for Excel response
+        const requestHeaders = {
+            'Authorization': headers.Authorization,
+            'Content-Type': 'application/json',
+            'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        };
+        
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: requestHeaders,
+            body: JSON.stringify({
+                teacher_id: teacherId,
+                class_id: classId,
+                subject_ids: subjectIds,
+                teacher_name: teacherName,
+                class_name: className
+            }),
+        });
+
+        if (!response.ok) {
+            // Try to get error message
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                const error = await response.json();
+                throw new Error(error.message || 'Failed to export scores');
+            } else {
+                throw new Error('Failed to export scores');
+            }
+        }
+
+        // Get filename from Content-Disposition header if available
+        const contentDisposition = response.headers.get('Content-Disposition');
+        let filename = `scores_${teacherName}_${className}_${new Date().toISOString().split('T')[0]}.xlsx`;
+        if (contentDisposition) {
+            const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+            if (filenameMatch) {
+                filename = filenameMatch[1];
+            }
+        }
+
+        const blob = await response.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(downloadUrl);
+
+        return { success: true };
+    }
+
     async downloadStudentTemplate() {
         // Use teacher endpoint if user is a teacher, otherwise use admin endpoint
         const user = JSON.parse(localStorage.getItem('user') || '{}');
